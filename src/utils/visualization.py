@@ -292,6 +292,127 @@ class Visualizer:
             
         return output
     
+    def draw_object_counts(
+        self,
+        image: np.ndarray,
+        detections: List[Detection]
+    ) -> np.ndarray:
+        """
+        Draw an object counting dashboard on the right side of the image.
+        
+        Shows count of each detected object type with visual bars.
+        
+        Args:
+            image: Input image
+            detections: List of Detection objects
+            
+        Returns:
+            Image with object counts panel
+        """
+        if not detections:
+            return image
+            
+        output = image.copy()
+        h, w = output.shape[:2]
+        
+        # Count objects by class
+        class_counts = {}
+        for det in detections:
+            class_name = det.class_name
+            class_counts[class_name] = class_counts.get(class_name, 0) + 1
+        
+        # Sort by count (descending)
+        sorted_counts = sorted(class_counts.items(), key=lambda x: x[1], reverse=True)
+        
+        # Limit to top 8 classes
+        sorted_counts = sorted_counts[:8]
+        
+        if not sorted_counts:
+            return output
+        
+        # Panel settings (right side)
+        panel_width = 200
+        panel_x = w - panel_width - 10
+        panel_y = 10
+        line_height = 30
+        bar_max_width = 100
+        
+        # Calculate panel height
+        panel_height = len(sorted_counts) * line_height + 50
+        
+        # Draw semi-transparent panel background
+        overlay = output.copy()
+        cv2.rectangle(
+            overlay,
+            (panel_x, panel_y),
+            (panel_x + panel_width, panel_y + panel_height),
+            (30, 30, 30),
+            -1
+        )
+        cv2.addWeighted(overlay, 0.7, output, 0.3, 0, output)
+        
+        # Draw border
+        cv2.rectangle(
+            output,
+            (panel_x, panel_y),
+            (panel_x + panel_width, panel_y + panel_height),
+            (0, 200, 255),  # Orange border
+            2
+        )
+        
+        # Draw title
+        cv2.putText(
+            output,
+            "OBJECT COUNTS",
+            (panel_x + 10, panel_y + 22),
+            cv2.FONT_HERSHEY_SIMPLEX,
+            0.55,
+            (0, 200, 255),  # Orange
+            2
+        )
+        
+        # Draw counts with bars
+        max_count = max(count for _, count in sorted_counts)
+        
+        for i, (class_name, count) in enumerate(sorted_counts):
+            y_pos = panel_y + 45 + i * line_height
+            
+            # Get class color
+            color = get_class_color(class_name)
+            
+            # Draw class name and count
+            text = f"{class_name}: {count}"
+            cv2.putText(
+                output,
+                text,
+                (panel_x + 10, y_pos),
+                cv2.FONT_HERSHEY_SIMPLEX,
+                0.45,
+                (255, 255, 255),
+                1
+            )
+            
+            # Draw progress bar
+            bar_width = int((count / max_count) * bar_max_width)
+            bar_y = y_pos + 5
+            cv2.rectangle(
+                output,
+                (panel_x + 10, bar_y),
+                (panel_x + 10 + bar_width, bar_y + 8),
+                color,
+                -1
+            )
+            # Bar border
+            cv2.rectangle(
+                output,
+                (panel_x + 10, bar_y),
+                (panel_x + 10 + bar_max_width, bar_y + 8),
+                (100, 100, 100),
+                1
+            )
+        
+        return output
+    
     def draw_all(
         self,
         image: np.ndarray,
@@ -321,6 +442,8 @@ class Visualizer:
             detection_count=len(detections),
             inference_time_ms=inference_time_ms
         )
+        # Add object counting dashboard (right side)
+        output = self.draw_object_counts(output, detections)
         return output
 
 

@@ -39,6 +39,7 @@ from src.camera.video_stream import VideoStream, create_ip_webcam_url
 from src.preprocessing.image_processor import ImageProcessor
 from src.detection.yolo_v8_detector import YOLOv8Detector
 from src.detection.yolo_v5_detector import YOLOv5Detector
+from src.detection.gun_detector import GunDetector
 from src.utils.config import Config
 from src.utils.performance_metrics import PerformanceMetrics
 from src.utils.visualization import Visualizer
@@ -61,8 +62,8 @@ Examples:
         "--model",
         type=str,
         default="yolo8",
-        choices=["yolo8", "yolo5", "both"],
-        help="Model to use: yolo8, yolo5, or both for comparison (default: yolo8)"
+        choices=["yolo8", "yolo5", "gun", "security", "both"],
+        help="Model: yolo8, yolo5, gun, security (yolo8+gun combined), or both"
     )
     
     parser.add_argument(
@@ -135,6 +136,42 @@ def initialize_detectors(args):
             detectors["yolo5"] = yolo5
         else:
             print("[Main] Warning: Failed to load YOLOv5")
+    
+    if args.model == "gun":
+        print("\n[Main] Initializing Gun Detector (Security Mode)...")
+        gun = GunDetector(
+            confidence_threshold=args.conf,
+            iou_threshold=args.iou,
+            device=args.device
+        )
+        if gun.load_model():
+            detectors["gun"] = gun
+        else:
+            print("[Main] Warning: Failed to load Gun Detector")
+    
+    # SECURITY MODE: YOLOv8 (all 80 objects) + Gun Detector combined
+    if args.model == "security":
+        print("\n[Main] Initializing SECURITY MODE (YOLOv8 + Gun Detection)...")
+        
+        # Load YOLOv8 for general object detection
+        yolo8 = YOLOv8Detector(
+            confidence_threshold=args.conf,
+            iou_threshold=args.iou,
+            device=args.device
+        )
+        if yolo8.load_model():
+            detectors["yolo8"] = yolo8
+        
+        # Load Gun Detector for weapon detection
+        gun = GunDetector(
+            confidence_threshold=args.conf,
+            iou_threshold=args.iou,
+            device=args.device
+        )
+        if gun.load_model():
+            detectors["gun"] = gun
+        
+        print("[Main] Security Mode: Detecting 80+ object classes + weapons")
             
     return detectors
 
@@ -169,6 +206,29 @@ def run_detection_loop(
     visualizer = Visualizer()
     metrics = PerformanceMetrics(window_size=30)
     
+    # Screenshot counter
+    screenshot_count = 0
+    os.makedirs(config.get_results_dir(), exist_ok=True)
+    
+    # Detection logging (CSV)
+    log_path = os.path.join(config.get_results_dir(), f"detection_log_{time.strftime('%Y%m%d_%H%M%S')}.csv")
+    log_file = open(log_path, 'w')
+    log_file.write("timestamp,model,class,confidence,x1,y1,x2,y2\n")
+    print(f"[Main] Detection log: {log_path}")
+    
+    # Alert settings - SMART HOME SECURITY
+    # Trigger alert for potentially dangerous objects
+    alert_classes = [
+        "knife",           # Dangerous weapon
+        "scissors",        # Sharp object
+        "baseball bat",    # Potential weapon
+        "bottle",          # Can be used as weapon
+        "backpack",        # Suspicious if unattended
+        "suitcase",        # Suspicious luggage
+    ]
+    last_alert_time = 0
+    alert_cooldown = 2.0  # seconds between alerts (faster for security)
+    
     # Get first available model as default
     current_model = list(detectors.keys())[0] if detectors else None
     
@@ -177,13 +237,12 @@ def run_detection_loop(
         return
         
     print(f"\n[Main] Starting detection with {detectors[current_model].model_name}")
-    print("[Main] Controls: 1=YOLOv8, 2=YOLOv5, +/- Threshold, Q=Quit")
+    print("[Main] Controls: 1=YOLOv8, 2=YOLOv5, S=Screenshot, +/- Threshold, Q=Quit")
     print("-" * 50)
     
     # Initialize Video Writer if requested
     video_writer = None
     if save_video:
-        os.makedirs(config.get_results_dir(), exist_ok=True)
         timestamp = time.strftime("%Y%m%d_%H%M%S")
         video_path = os.path.join(config.get_results_dir(), f"detection_output_{timestamp}.mp4")
         fps = video_stream.get_fps()
@@ -215,9 +274,23 @@ def run_detection_loop(
             
             # Detection (Lab 5 concept - multiple models)
             metrics.start_inference()
-            detector = detectors[current_model]
-            detections = detector.detect(frame)
-            inference_time = detector.get_inference_time()
+            
+            # Run detection on all loaded models and combine results
+            all_detections = []
+            total_inference_time = 0
+            active_model_names = []
+            
+            for model_key in detectors:
+                detector = detectors[model_key]
+                model_detections = detector.detect(frame)
+                all_detections.extend(model_detections)
+                total_inference_time += detector.get_inference_time()
+                active_model_names.append(detector.model_name)
+            
+            detections = all_detections
+            inference_time = total_inference_time
+            model_display_name = " + ".join(active_model_names) if len(active_model_names) > 1 else active_model_names[0]
+            
             metrics.end_inference()
             
             # Visualization
@@ -226,10 +299,26 @@ def run_detection_loop(
                 frame,
                 detections=detections,
                 fps=metrics.get_fps(),
-                model_name=detector.model_name,
+                model_name=model_display_name,
                 inference_time_ms=inference_time
             )
             metrics.end_visualization()
+            
+            # Log detections to CSV
+            current_time = time.time()
+            timestamp_str = time.strftime('%Y-%m-%d %H:%M:%S')
+            for det in detections:
+                log_file.write(f"{timestamp_str},{detector.model_name},{det.class_name},{det.confidence:.3f},{det.bbox[0]},{det.bbox[1]},{det.bbox[2]},{det.bbox[3]}\n")
+            
+            # Alert for specific objects
+            detected_alert_classes = [det.class_name for det in detections if det.class_name in alert_classes]
+            if detected_alert_classes and (current_time - last_alert_time) > alert_cooldown:
+                last_alert_time = current_time
+                try:
+                    import winsound
+                    winsound.Beep(1000, 200)  # Frequency 1000Hz, Duration 200ms
+                except:
+                    print(f"\n🚨 ALERT: {', '.join(set(detected_alert_classes))} detected!")
             
             # End frame timing
             metrics.end_frame(detector.model_name, len(detections))
@@ -263,6 +352,12 @@ def run_detection_loop(
             elif key == ord('-'):
                 new_conf = max(0.05, detector.confidence_threshold - 0.05)
                 detector.set_confidence_threshold(new_conf)
+            
+            elif key == ord('s') or key == ord('S'):
+                screenshot_count += 1
+                screenshot_path = os.path.join(config.get_results_dir(), f"screenshot_{screenshot_count}.jpg")
+                cv2.imwrite(screenshot_path, output_frame)
+                print(f"\n[Main] Screenshot saved: {screenshot_path}")
                 
     except KeyboardInterrupt:
         print("\n[Main] Interrupted by user")
@@ -279,6 +374,10 @@ def run_detection_loop(
         if video_writer:
             video_writer.release()
             print(f"[Main] Video saved successfully.")
+        
+        # Close detection log
+        log_file.close()
+        print(f"[Main] Detection log saved.")
             
         cv2.destroyAllWindows()
 
