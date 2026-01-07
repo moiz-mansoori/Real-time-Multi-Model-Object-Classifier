@@ -2,9 +2,6 @@
 Video Stream Module
 ===================
 Handles camera input from IP Webcam, local webcam, or video files.
-
-Lab Concept Integration:
-- Lab 12 (Real-Time ML Pipeline): Live camera feed acquisition
 """
 
 import cv2

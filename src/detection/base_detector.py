@@ -2,9 +2,6 @@
 Base Detector Module
 ====================
 Abstract base class for object detection models.
-
-Lab Concept Integration:
-- Lab 5 (Ensemble/Multiple Models): Common interface for multiple model implementations
 """
 
 from abc import ABC, abstractmethod

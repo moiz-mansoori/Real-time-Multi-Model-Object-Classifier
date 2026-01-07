@@ -2,9 +2,6 @@
 Image Processor Module
 ======================
 Handles image preprocessing for object detection models.
-
-Lab Concept Integration:
-- Lab 1 (Data Preprocessing): Image resizing, normalization, color conversion
 """
 
 import cv2

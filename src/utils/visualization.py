@@ -2,9 +2,6 @@
 Visualization Module
 ====================
 Drawing bounding boxes, labels, and overlays for object detection.
-
-Lab Concept Integration:
-- Lab 12 (Real-Time ML Pipeline): Visual feedback for real-time detections
 """
 
 import cv2

@@ -2,10 +2,6 @@
 YOLOv8 Detector Module
 ======================
 YOLOv8-nano implementation using Ultralytics library.
-
-Lab Concept Integration:
-- Lab 5 (Ensemble/Multiple Models): One of the multi-model implementations
-- Lab 6 (Model Comparison): Comparable with YOLOv5 for performance analysis
 """
 
 import time

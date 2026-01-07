@@ -61,9 +61,9 @@ Examples:
     parser.add_argument(
         "--model",
         type=str,
-        default="yolo8",
-        choices=["yolo8", "yolo5", "gun", "security", "both"],
-        help="Model: yolo8, yolo5, gun, security (yolo8+gun combined), or both"
+        default="all",
+        choices=["all", "yolo8", "yolo5", "gun", "security", "both"],
+        help="Model: all (default, loads all 3), yolo8, yolo5, gun, security, or both"
     )
     
     parser.add_argument(
@@ -112,6 +112,43 @@ Examples:
 def initialize_detectors(args):
     """Initialize object detection models."""
     detectors = {}
+    
+    # ALL MODE: Load all 3 models (YOLOv8 + YOLOv5 + Gun)
+    if args.model == "all":
+        print("\n[Main] Initializing ALL MODELS MODE...")
+        
+        # Load YOLOv8
+        print("[Main] Loading YOLOv8-nano...")
+        yolo8 = YOLOv8Detector(
+            confidence_threshold=args.conf,
+            iou_threshold=args.iou,
+            device=args.device
+        )
+        if yolo8.load_model():
+            detectors["yolo8"] = yolo8
+        
+        # Load YOLOv5
+        print("[Main] Loading YOLOv5-small...")
+        yolo5 = YOLOv5Detector(
+            confidence_threshold=args.conf,
+            iou_threshold=args.iou,
+            device=args.device
+        )
+        if yolo5.load_model():
+            detectors["yolo5"] = yolo5
+        
+        # Load Gun Detector
+        print("[Main] Loading Gun Detector...")
+        gun = GunDetector(
+            confidence_threshold=args.conf,
+            iou_threshold=args.iou,
+            device=args.device
+        )
+        if gun.load_model():
+            detectors["gun"] = gun
+        
+        print(f"[Main] All Models Mode: Loaded {len(detectors)} models")
+        return detectors
     
     if args.model in ["yolo8", "both"]:
         print("\n[Main] Initializing YOLOv8-nano...")
@@ -229,15 +266,17 @@ def run_detection_loop(
     last_alert_time = 0
     alert_cooldown = 2.0  # seconds between alerts (faster for security)
     
-    # Get first available model as default
-    current_model = list(detectors.keys())[0] if detectors else None
+    # Track which models are currently active (for switching)
+    # Start with all loaded models active
+    active_models = list(detectors.keys())
     
-    if not current_model:
+    if not active_models:
         print("[Main] Error: No models available")
         return
         
-    print(f"\n[Main] Starting detection with {detectors[current_model].model_name}")
-    print("[Main] Controls: 1=YOLOv8, 2=YOLOv5, S=Screenshot, +/- Threshold, Q=Quit")
+    model_names = [detectors[m].model_name for m in active_models]
+    print(f"\n[Main] Starting detection with: {', '.join(model_names)}")
+    print("[Main] Controls: 0=All Models, 1=YOLOv8, 2=YOLOv5, 3=Gun, S=Screenshot, +/- Threshold, Q=Quit")
     print("-" * 50)
     
     # Initialize Video Writer if requested
@@ -275,17 +314,18 @@ def run_detection_loop(
             # Detection (Lab 5 concept - multiple models)
             metrics.start_inference()
             
-            # Run detection on all loaded models and combine results
+            # Run detection on active models and combine results
             all_detections = []
             total_inference_time = 0
             active_model_names = []
             
-            for model_key in detectors:
-                detector = detectors[model_key]
-                model_detections = detector.detect(frame)
-                all_detections.extend(model_detections)
-                total_inference_time += detector.get_inference_time()
-                active_model_names.append(detector.model_name)
+            for model_key in active_models:
+                if model_key in detectors:
+                    detector = detectors[model_key]
+                    model_detections = detector.detect(frame)
+                    all_detections.extend(model_detections)
+                    total_inference_time += detector.get_inference_time()
+                    active_model_names.append(detector.model_name)
             
             detections = all_detections
             inference_time = total_inference_time
@@ -314,17 +354,42 @@ def run_detection_loop(
             detected_alert_classes = [det.class_name for det in detections if det.class_name in alert_classes]
             if detected_alert_classes and (current_time - last_alert_time) > alert_cooldown:
                 last_alert_time = current_time
+                # Play beep sound (cross-platform)
                 try:
-                    import winsound
-                    winsound.Beep(1000, 200)  # Frequency 1000Hz, Duration 200ms
+                    import subprocess
+                    import platform
+                    if platform.system() == 'Windows':
+                        import winsound
+                        winsound.Beep(1000, 200)
+                    else:
+                        # Linux/Mac: Use paplay, aplay, or beep command
+                        try:
+                            subprocess.Popen(['paplay', '/usr/share/sounds/freedesktop/stereo/alarm-clock-elapsed.oga'], 
+                                           stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
+                        except:
+                            try:
+                                subprocess.Popen(['aplay', '-q', '/usr/share/sounds/alsa/Front_Center.wav'],
+                                               stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
+                            except:
+                                os.system('echo -e "\a"')  # Terminal beep
                 except:
-                    print(f"\n🚨 ALERT: {', '.join(set(detected_alert_classes))} detected!")
+                    pass
+                print(f"\n🚨 ALERT: {', '.join(set(detected_alert_classes))} detected!")
             
             # End frame timing
             metrics.end_frame(detector.model_name, len(detections))
             
+            # Resize frame for display (scale down if too large)
+            display_frame = output_frame
+            max_display_height = 720
+            h, w = output_frame.shape[:2]
+            if h > max_display_height:
+                scale = max_display_height / h
+                new_w = int(w * scale)
+                display_frame = cv2.resize(output_frame, (new_w, max_display_height))
+            
             # Display
-            cv2.imshow(config.window_name, output_frame)
+            cv2.imshow(config.window_name, display_frame)
             
             # Save frame if requested
             if video_writer:
@@ -336,22 +401,39 @@ def run_detection_loop(
             if key == ord('q') or key == ord('Q'):
                 print("\n[Main] Quitting...")
                 break
+            
+            elif key == ord('0'):
+                # Switch to ALL models
+                active_models = list(detectors.keys())
+                print(f"\n[Main] Switched to ALL MODELS: {', '.join([detectors[m].model_name for m in active_models])}")
                 
             elif key == ord('1') and "yolo8" in detectors:
-                current_model = "yolo8"
-                print(f"\n[Main] Switched to {detectors[current_model].model_name}")
+                active_models = ["yolo8"]
+                print(f"\n[Main] Switched to {detectors['yolo8'].model_name} only")
                 
             elif key == ord('2') and "yolo5" in detectors:
-                current_model = "yolo5"
-                print(f"\n[Main] Switched to {detectors[current_model].model_name}")
+                active_models = ["yolo5"]
+                print(f"\n[Main] Switched to {detectors['yolo5'].model_name} only")
+            
+            elif key == ord('3') and "gun" in detectors:
+                active_models = ["gun"]
+                print(f"\n[Main] Switched to {detectors['gun'].model_name} only")
                 
             elif key == ord('+') or key == ord('='):
-                new_conf = min(0.95, detector.confidence_threshold + 0.05)
-                detector.set_confidence_threshold(new_conf)
+                # Adjust threshold for all active models
+                for model_key in active_models:
+                    if model_key in detectors:
+                        new_conf = min(0.95, detectors[model_key].confidence_threshold + 0.05)
+                        detectors[model_key].set_confidence_threshold(new_conf)
+                print(f"\n[Main] Increased confidence threshold")
                 
             elif key == ord('-'):
-                new_conf = max(0.05, detector.confidence_threshold - 0.05)
-                detector.set_confidence_threshold(new_conf)
+                # Adjust threshold for all active models
+                for model_key in active_models:
+                    if model_key in detectors:
+                        new_conf = max(0.05, detectors[model_key].confidence_threshold - 0.05)
+                        detectors[model_key].set_confidence_threshold(new_conf)
+                print(f"\n[Main] Decreased confidence threshold")
             
             elif key == ord('s') or key == ord('S'):
                 screenshot_count += 1

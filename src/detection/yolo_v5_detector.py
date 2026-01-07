@@ -2,10 +2,6 @@
 YOLOv5 Detector Module
 ======================
 YOLOv5-small implementation using PyTorch Hub.
-
-Lab Concept Integration:
-- Lab 5 (Ensemble/Multiple Models): Second model for comparison
-- Lab 6 (Model Comparison): Comparable with YOLOv8 for performance analysis
 """
 
 import time

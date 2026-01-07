@@ -2,9 +2,6 @@
 Performance Metrics Module
 ==========================
 FPS and latency measurement for model comparison.
-
-Lab Concept Integration:
-- Lab 6 (Model Comparison & Optimization): Performance metrics for comparing models
 """
 
 import time
@@ -37,10 +34,6 @@ class PerformanceMetrics:
     - Preprocessing time
     - Total pipeline time
     - Detection counts
-    
-    Lab 6 Concept: Model Comparison & Optimization
-    - Enables quantitative comparison between YOLOv8 and YOLOv5
-    - Supports threshold tuning analysis
     """
     
     def __init__(
