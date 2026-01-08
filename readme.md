@@ -6,6 +6,10 @@
 
 > **Lab-14: Complex Computing Activity**  
 > Machine Learning (BSAI-462) | 7th Semester | Batch 2022
+>
+> **Group Members:**  
+> Hamza Kamelen (22F-BSAI-09) | Moiz Ahmed Mansoori (22F-BSAI-32)  
+> Muzzamil Khalid (22F-BSAI-29) | Muhammad Sami (22F-BSAI-43)
 
 A real-time object detection system using mobile phone camera as video input, implementing multiple ML models with performance comparison.
 
@@ -26,7 +30,10 @@ This project implements a **real-time object detection system** using a **mobile
 
 - ✅ Real-time object detection
 - ✅ Mobile phone camera integration (IP Webcam)
-- ✅ Multiple ML models (YOLOv8-nano & YOLOv5-small)
+- ✅ **Multiple ML models**:
+    - YOLOv8-nano (General Purpose)
+    - YOLOv5-small (General Purpose)
+    - **Gun Detector** (Security Focused)
 - ✅ Bounding boxes with labels and confidence scores
 - ✅ FPS and latency measurement
 - ✅ Runtime model switching
@@ -34,50 +41,34 @@ This project implements a **real-time object detection system** using a **mobile
 
 ---
 
-## 🧠 Lab Concepts Integrated
-
-This project integrates **4 lab concepts** from the ML Lab Manual:
-
-| Lab | Concept | Implementation |
-|-----|---------|----------------|
-| Lab 1 | Data Preprocessing | Image resizing, normalization, color conversion |
-| Lab 5 | Ensemble/Multiple Models | YOLOv8-nano + YOLOv5-small |
-| Lab 6 | Model Comparison & Optimization | FPS, latency, threshold tuning |
-| Lab 12 | Real-Time ML Pipeline | Live camera feed processing |
-
----
-
 ## 🏗️ System Architecture
 
-```
-Mobile Camera (IP Webcam)
-         │
-         ▼ Wi-Fi Video Stream
-┌─────────────────────────┐
-│   OpenCV Frame Capture  │
-└───────────┬─────────────┘
-            │
-            ▼
-┌─────────────────────────┐
-│   Image Preprocessing   │
-│   • Resize (640×640)    │
-│   • Normalize           │
-└───────────┬─────────────┘
-            │
-            ▼
-┌─────────────────────────────────────┐
-│     Multi-Model Detection Engine    │
-├─────────────────┬───────────────────┤
-│  YOLOv8-nano    │   YOLOv5-small    │
-└─────────────────┴───────────────────┘
-            │
-            ▼
-┌─────────────────────────┐
-│   Visualization         │
-│   • Bounding Boxes      │
-│   • FPS Overlay         │
-│   • Model Info          │
-└─────────────────────────┘
+**High-Level System Context**
+
+```mermaid
+graph LR
+    %% Style Definitions
+    classDef mobile fill:#e1f5fe,stroke:#01579b,stroke-width:2px,color:#01579b;
+    classDef system fill:#f3e5f5,stroke:#4a148c,stroke-width:2px,color:#4a148c;
+    classDef display fill:#e8f5e9,stroke:#1b5e20,stroke-width:2px,color:#1b5e20;
+    classDef stream stroke-dasharray: 5 5;
+
+    subgraph Source [Input Source]
+        Mobile[📱 Mobile Camera]:::mobile
+        App[🌐 IP Webcam App]:::mobile
+    end
+
+    subgraph Core [Processing Unit]
+        Engine[⚙️ Multi-Model Classifier]:::system
+    end
+
+    subgraph Output [Visualization]
+        Screen[🖥️ Display Screen]:::display
+    end
+
+    Mobile -->|Optical Input| App
+    App -.->|Wi-Fi Stream (HTTP/RTSP)| Engine
+    Engine -->|Annotated Frames| Screen
 ```
 
 ---
@@ -101,7 +92,8 @@ Real-time Multi-Model Object Classifier/
 │   ├── detection/
 │   │   ├── base_detector.py         # Abstract detector class
 │   │   ├── yolo_v8_detector.py      # YOLOv8-nano (Lab 5)
-│   │   └── yolo_v5_detector.py      # YOLOv5-small (Lab 5)
+│   │   ├── yolo_v5_detector.py      # YOLOv5-small (Lab 5)
+│   │   └── gun_detector.py          # Gun Detector (Security)
 │   │
 │   └── utils/
 │       ├── config.py                # Configuration
@@ -118,26 +110,11 @@ Real-time Multi-Model Object Classifier/
 
 ---
 
-## ⚙️ Requirements
-
-### Hardware
-- Android mobile phone with IP Webcam app
-- Laptop/PC OR Google Colab (cloud GPU recommended)
-- Wi-Fi network (same network for phone and PC)
-
-### Software
-- Python 3.8+
-- OpenCV 4.8+
-- PyTorch 2.0+
-- Ultralytics (YOLOv8)
-
----
-
 ## 🔧 Installation
 
 ### 1. Clone the Repository
 ```bash
-git clone https://github.com/your-username/Real-time-Multi-Model-Object-Classifier.git
+git clone https://github.com/moiz-mansoori/Real-time-Multi-Model-Object-Classifier.git
 cd Real-time-Multi-Model-Object-Classifier
 ```
 
@@ -179,23 +156,15 @@ python main.py --model yolo8 --source 0
 # Run with YOLOv5 and webcam
 python main.py --model yolo5 --source 0
 
+# Run Gun Detector
+python main.py --model gun --source 0
+
 # Run with IP Webcam
 python main.py --model yolo8 --source "http://192.168.1.10:8080/video"
 
-# Compare both models
+# Compare all models
 python main.py --model both --source 0
 ```
-
-### Command Line Arguments
-
-| Argument | Description | Default |
-|----------|-------------|---------|
-| `--model` | Model to use: `yolo8`, `yolo5`, `both` | `yolo8` |
-| `--source` | Video source: webcam index, URL, or file | `0` |
-| `--conf` | Confidence threshold | `0.5` |
-| `--iou` | IoU threshold for NMS | `0.45` |
-| `--device` | Device: `auto`, `cpu`, `cuda` | `auto` |
-| `--save-metrics` | Save performance metrics | `False` |
 
 ### Keyboard Controls
 
@@ -203,47 +172,32 @@ python main.py --model both --source 0
 |-----|--------|
 | `1` | Switch to YOLOv8 |
 | `2` | Switch to YOLOv5 |
+| `3` | Switch to Gun Detector |
 | `+` | Increase confidence threshold |
 | `-` | Decrease confidence threshold |
 | `Q` | Quit |
 
 ---
 
-## 📊 Performance Metrics
+## Performance Metrics
 
 Expected performance (hardware dependent):
 
-| Metric | YOLOv8-nano | YOLOv5-small |
-|--------|-------------|--------------|
-| FPS (Cloud GPU) | 45-60 | 35-50 |
-| FPS (Local GPU) | 30-45 | 25-40 |
-| FPS (CPU) | 5-10 | 3-8 |
-| Inference Time | 15-25 ms | 20-35 ms |
-
-> **Note:** 25-60 FPS on cloud GPU (hardware dependent); lower FPS on CPU-only systems.
+| Metric | YOLOv8-nano | YOLOv5-small | Gun Detector |
+|--------|-------------|--------------|--------------|
+| FPS (Cloud GPU) | 45-60 | 35-50 | 45-60 |
+| FPS (Local GPU) | 30-45 | 25-40 | 30-45 |
+| FPS (CPU) | 5-10 | 3-8 | 5-10 |
 
 ---
 
-## ☁️ Execution Environment
-
-> Due to limited local CPU resources and the real-time nature of object detection models, the system was deployed and evaluated on a **cloud-based GPU environment (Google Colab)**. This ensured stable real-time performance and allowed fair comparison between multiple detection models. The use of cloud acceleration reflects real-world ML deployment practices.
-
-| Scenario | Recommendation |
-|----------|----------------|
-| Weak CPU | ✅ Use Cloud GPU |
-| Short on time | ✅ Use Cloud GPU |
-| Want smooth demo | ✅ Use Cloud GPU |
-| Worried about lag | ✅ Use Cloud GPU |
-
----
-
-## 📝 Project Report
+## Project Report
 
 See [`report/PROJECT_REPORT.md`](report/PROJECT_REPORT.md) for the complete Lab-14 report including:
 
 - Introduction & Problem Statement
 - Lab Concepts Integration
-- System Architecture
+- System Architecture (Detailed Diagrams)
 - Model Design & Evaluation
 - Performance Analysis
 - Challenges & Limitations
@@ -252,27 +206,7 @@ See [`report/PROJECT_REPORT.md`](report/PROJECT_REPORT.md) for the complete Lab-
 
 ---
 
-## 🎥 Demo
-
-For demonstration:
-- Live demo showing mobile camera detections
-- OR 30-60 second recorded video
-- Show mobile camera, detections, FPS overlay
-
----
-
-## 📈 Sample Output
-
-The system displays:
-- **Bounding boxes** around detected objects
-- **Class labels** with confidence scores
-- **FPS counter** (top-left)
-- **Model name** currently active
-- **Inference latency** in milliseconds
-
----
-
-## 🤝 Contributing
+## Contributing
 
 1. Fork the repository
 2. Create a feature branch
@@ -282,9 +216,7 @@ The system displays:
 
 ---
 
-
-
-## 🙏 Acknowledgments
+## Acknowledgments
 
 - Ultralytics for YOLOv8
 - PyTorch team for YOLOv5

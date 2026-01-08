@@ -1,536 +1,290 @@
-# Lab-14: Complex Computing Activity
-# Real-time Multi-Model Object Classifier (Mobile-Based)
+# Real-time Multi-Model Object Classifier Report
 
-**Course:** Machine Learning (BSAI-462)  
-**Semester:** 7th Semester, 4th Year  
-**Batch:** 2022  
+**Dawood University of Engineering and Technology**  
+**Department of Artificial Intelligence**
 
-**Roll Number:** 22F-BSAI-29,22F-BSAI-32,22F-BSAI-43,22F-BSAI-09  
-**Submission Date:** 2026-01-07
+**Course:** Machine Learning
+**Lab Activity:** Lab-14 (Complex Computing Activity)  
+**Semester:** 7th Semester | Batch 2022
 
----
+**Group Members:**
+*   Hamza Kamelen (22F-BSAI-09)
+*   Moiz Ahmed Mansoori (22F-BSAI-32)
+*   Muzzamil Khalid (22F-BSAI-29)
+*   Muhammad Sami (22F-BSAI-43)
 
-## Table of Contents
-1. [Introduction](#1-introduction)
-2. [Problem Statement](#2-problem-statement)
-3. [Lab Concepts Integration](#3-lab-concepts-integration)
-4. [Dataset Description](#4-dataset-description)
-5. [Data Preprocessing](#5-data-preprocessing)
-6. [System Architecture](#6-system-architecture)
-7. [Model Design](#7-model-design)
-8. [Model Evaluation](#8-model-evaluation)
-9. [Real-Time Performance Analysis](#9-real-time-performance-analysis)
-10. [Execution Environment](#10-execution-environment)
-11. [Challenges & Limitations](#11-challenges--limitations)
-12. [Ethical Considerations](#12-ethical-considerations)
-13. [Conclusion & Future Work](#13-conclusion--future-work)
-14. [References](#14-references)
+**Submitted to:** Engr. Hamza Farooqui  
+**Submission Date:** January 7, 2026
 
 ---
 
 ## 1. Introduction
 
-This project implements a **Real-time Multi-Model Object Classifier** that uses a mobile phone camera as the video input source and employs multiple machine learning models for object detection. The system demonstrates practical application of various ML concepts learned throughout the course labs.
+This project implements a real-time object detection system designed to operate with a mobile phone camera as the video input source. The system leverages state-of-the-art deep learning models, specifically YOLOv8 and YOLOv5, to detect and classify objects in live video streams. The primary objective is to demonstrate a complete machine learning pipeline—from data acquisition and preprocessing to model inference and performance evaluation—within a resource-constrained environment (simulated via mobile camera input and cloud/local processing).
 
-### Project Objectives
-- Build a real-time object detection pipeline using mobile camera input
-- Implement and compare multiple detection models (YOLOv8-nano and YOLOv5-small)
-- Measure and analyze performance metrics (FPS, latency, detection accuracy)
-- Integrate concepts from multiple lab experiments into a cohesive system
-
-### Key Features
-- Real-time object detection from IP Webcam video stream
-- Multi-model support with runtime switching
-- Performance metrics visualization (FPS, latency)
-- Bounding boxes with class labels and confidence scores
-- Professional code structure following software engineering best practices
+The system is built to allow real-time switching between models, enabling a direct comparison of performance metrics such as Frames Per Second (FPS) and inference latency. Additionally, a specialized **Gun Detector** model is integrated to demonstrate a security-focused use case. This report details the system architecture, model designs, experimental results, and the challenges encountered during development.
 
 ---
 
-## 2. Problem Statement
+## 2. System Architecture & Pipeline
 
-Object detection in real-time video streams is a fundamental computer vision task with applications in surveillance, autonomous vehicles, robotics, and augmented reality. The challenge lies in achieving:
+The system follows a modular pipeline architecture designed for efficiency and extensibility. The data flows from the mobile camera source through preprocessing, inference, and finally to visualization.
 
-1. **Real-time performance** - Processing frames fast enough for smooth video display (>20 FPS)
-2. **Accuracy** - Correctly detecting and classifying objects with high confidence
-3. **Multi-model comparison** - Evaluating trade-offs between different model architectures
-4. **Resource efficiency** - Running efficiently on available hardware
+### 2.1 System Architecture & Pipeline
 
-This project addresses these challenges by implementing a complete pipeline that:
-- Captures video from a mobile phone camera via Wi-Fi
-- Applies preprocessing optimized for detection models
-- Runs inference using multiple YOLO variants
-- Visualizes results with performance metrics
+**Figure 1: High-Level System Context**
 
----
+```mermaid
+graph LR
+    %% Style Definitions
+    classDef mobile fill:#e1f5fe,stroke:#01579b,stroke-width:2px,color:#01579b;
+    classDef system fill:#f3e5f5,stroke:#4a148c,stroke-width:2px,color:#4a148c;
+    classDef display fill:#e8f5e9,stroke:#1b5e20,stroke-width:2px,color:#1b5e20;
+    classDef stream stroke-dasharray: 5 5;
 
-## 3. Lab Concepts Integration
+    subgraph Source [Input Source]
+        Mobile[📱 Mobile Camera]:::mobile
+        App[🌐 IP Webcam App]:::mobile
+    end
 
-This project explicitly integrates **four distinct concepts** from the ML Lab Manual:
+    subgraph Core [Processing Unit]
+        Engine[⚙️ Multi-Model Classifier]:::system
+    end
 
-### 3.1 Lab 1 — Data Preprocessing
-**Location:** `src/preprocessing/image_processor.py`
+    subgraph Output [Visualization]
+        Screen[🖥️ Display Screen]:::display
+    end
 
-The preprocessing module implements essential image preprocessing steps:
-
-| Technique | Implementation | Purpose |
-|-----------|----------------|---------|
-| Image Resizing | Resize to 640×640 | Consistent input size for models |
-| Normalization | Scale pixels to [0,1] | Neural network optimization |
-| Color Conversion | BGR → RGB | Model compatibility |
-
-```python
-# Example from image_processor.py
-def _normalize(self, image: np.ndarray) -> np.ndarray:
-    """Normalize pixel values to [0, 1] range."""
-    return image.astype(np.float32) / 255.0
+    Mobile -->|Optical Input| App
+    App -.->|Wi-Fi Stream (HTTP/RTSP)| Engine
+    Engine -->|Annotated Frames| Screen
 ```
 
-### 3.2 Lab 5 — Ensemble/Multiple Models
-**Location:** `src/detection/yolo_v8_detector.py`, `src/detection/yolo_v5_detector.py`
+**Figure 2: Detailed Processing Pipeline**
 
-The system implements multiple detection models:
+```mermaid
+graph TD
+    %% Style Definitions
+    classDef input fill:#fff3e0,stroke:#e65100,stroke-width:2px,color:#e65100;
+    classDef process fill:#e3f2fd,stroke:#1565c0,stroke-width:2px,color:#1565c0;
+    classDef model fill:#fce4ec,stroke:#880e4f,stroke-width:2px,color:#880e4f;
+    classDef logic fill:#f3e5f5,stroke:#4a148c,stroke-width:2px,color:#4a148c;
+    classDef output fill:#e8f5e9,stroke:#2e7d32,stroke-width:2px,color:#2e7d32;
 
-| Model | Architecture | Characteristics |
-|-------|--------------|-----------------|
-| YOLOv8-nano | Ultralytics YOLOv8 | Newest, fastest inference |
-| YOLOv5-small | PyTorch Hub | Well-established, balanced |
-
-Both models share a common interface (`BaseDetector`) enabling seamless switching and comparison.
-
-### 3.3 Lab 6 — Model Comparison & Optimization
-**Location:** `src/utils/performance_metrics.py`
-
-The performance metrics module enables quantitative comparison:
-
-- **FPS Calculation** - Rolling average for stability
-- **Inference Latency** - Per-frame timing in milliseconds
-- **Threshold Tuning** - Confidence threshold optimization (inspired by hyperparameter tuning concepts)
-- **Evaluation Metrics** - Qualitative precision comparison based on detection consistency and false positive rates
-
-### 3.4 Lab 12 (Conceptual) — Real-Time ML Pipeline
-**Location:** `main.py`, `src/camera/video_stream.py`
-
-The real-time pipeline implements:
-
-```
-Camera Capture → Preprocessing → Inference → Visualization → Display
-```
-
-This closed-loop system runs continuously at real-time speeds.
-
----
-
-## 4. Dataset Description
-
-### COCO Pretrained Models
-Both models are pretrained on the **COCO (Common Objects in Context)** dataset:
-
-| Attribute | Value |
-|-----------|-------|
-| Total Classes | 80 |
-| Training Images | 118,287 |
-| Validation Images | 5,000 |
-| Object Categories | Person, Vehicle, Animal, Food, Furniture, Electronics, etc. |
-
-### Target Classes for Demo
-For demonstration purposes, the system focuses on common objects:
-- person
-- bottle
-- cup
-- cell phone
-- laptop
-- chair
-- keyboard
-- mouse
-- book
-- remote
-
-**Note:** No custom training is required as pretrained COCO weights provide excellent detection for common objects.
-
----
-
-## 5. Data Preprocessing
-
-### Preprocessing Pipeline
-
-The preprocessing module (`ImageProcessor`) applies the following transformations:
-
-#### 5.1 Image Resizing
-```python
-def _resize(self, image: np.ndarray) -> np.ndarray:
-    return cv2.resize(image, self.target_size, interpolation=cv2.INTER_LINEAR)
-```
-- **Purpose:** Ensures consistent input dimensions (640×640)
-- **Method:** Bilinear interpolation for quality
-
-#### 5.2 Normalization
-```python
-def _normalize(self, image: np.ndarray) -> np.ndarray:
-    return image.astype(np.float32) / 255.0
-```
-- **Purpose:** Scales pixel values to [0, 1] range
-- **Benefit:** Improved neural network convergence and stability
-
-#### 5.3 Color Space Conversion
-```python
-def _bgr_to_rgb(self, image: np.ndarray) -> np.ndarray:
-    return cv2.cvtColor(image, cv2.COLOR_BGR2RGB)
-```
-- **Purpose:** OpenCV uses BGR; models expect RGB
-- **Benefit:** Correct color interpretation during inference
-
----
-
-## 6. System Architecture
-
-### High-Level Architecture
-
-```
-┌─────────────────────────────────────────────────────────────────┐
-│                    SYSTEM ARCHITECTURE                          │
-├─────────────────────────────────────────────────────────────────┤
-│                                                                 │
-│  ┌──────────────┐                                               │
-│  │ Mobile Phone │                                               │
-│  │ (IP Webcam)  │                                               │
-│  └──────┬───────┘                                               │
-│         │ Wi-Fi Video Stream                                    │
-│         ▼                                                       │
-│  ┌──────────────┐     ┌───────────────────────────┐             │
-│  │ VideoStream  │────▶│ Image Preprocessing       │             │
-│  │ Module       │     │ • Resize (640×640)        │             │
-│  └──────────────┘     │ • Normalize               │             │
-│                       └───────────────────────────┘             │
-│         │                                                       │
-│         ▼                                                       │
-│  ┌─────────────────────────────────────────────────┐            │
-│  │         Multi-Model Detection Engine            │            │
-│  ├────────────────────┬────────────────────────────┤            │
-│  │   YOLOv8-nano      │      YOLOv5-small          │            │
-│  └────────────────────┴────────────────────────────┘            │
-│         │                                                       │
-│         ▼                                                       │
-│  ┌──────────────┐     ┌───────────────────────────┐             │
-│  │ Visualization│────▶│ Performance Metrics       │             │
-│  │ Module       │     │ • FPS Counter             │             │
-│  │              │     │ • Latency Display         │             │
-│  └──────────────┘     └───────────────────────────┘             │
-│                                                                 │
-└─────────────────────────────────────────────────────────────────┘
-```
-
-### Module Descriptions
-
-| Module | File | Responsibility |
-|--------|------|----------------|
-| VideoStream | `src/camera/video_stream.py` | Camera connection, frame capture |
-| ImageProcessor | `src/preprocessing/image_processor.py` | Preprocessing pipeline |
-| YOLOv8Detector | `src/detection/yolo_v8_detector.py` | YOLOv8-nano inference |
-| YOLOv5Detector | `src/detection/yolo_v5_detector.py` | YOLOv5-small inference |
-| Visualizer | `src/utils/visualization.py` | Bounding box drawing |
-| PerformanceMetrics | `src/utils/performance_metrics.py` | FPS/latency tracking |
-
----
-
-## 7. Model Design
-
-### 7.1 YOLOv8-nano
-
-| Attribute | Value |
-|-----------|-------|
-| Framework | Ultralytics |
-| Architecture | CSPDarknet backbone + PANet neck |
-| Parameters | ~3.2M |
-| Input Size | 640×640 |
-| Output | Bounding boxes, class IDs, confidence scores |
-
-**Key Features:**
-- Anchor-free detection
-- Improved accuracy-to-speed ratio
-- Native support for various tasks (detect, segment, pose)
-
-### 7.2 YOLOv5-small
-
-| Attribute | Value |
-|-----------|-------|
-| Framework | PyTorch Hub |
-| Architecture | CSPNet backbone |
-| Parameters | ~7.2M |
-| Input Size | 640×640 |
-| Output | Bounding boxes, class IDs, confidence scores |
-
-**Key Features:**
-- Well-established and thoroughly tested
-- Strong community support
-- Easy deployment options
-
-### 7.3 Common Interface (BaseDetector)
-
-Both models implement a common abstract interface:
-
-```python
-class BaseDetector(ABC):
-    @abstractmethod
-    def load_model(self) -> bool: ...
+    %% Nodes
+    Cam(🎥 Video Capture):::input
     
-    @abstractmethod
-    def detect(self, image: np.ndarray) -> List[Detection]: ...
+    subgraph Preprocessing [⚡ Preprocessing Layer]
+        Resize(📐 Resize 640x640):::process
+        Color(🎨 BGR to RGB):::process
+        Norm(📊 Normalize 0-1):::process
+    end
+
+    subgraph Inference [🧠 Inference Engine]
+        Switch{🔀 Model Selector}:::logic
+        Y8[🚀 YOLOv8-nano]:::model
+        Y5[🛡️ YOLOv5-small]:::model
+        Gun[🔫 Gun Detector]:::model
+    end
+
+    subgraph PostProcessing [🔧 Post-Processing]
+        NMS(🧹 NMS Filter):::process
+        Conf(🎯 Confidence Thresh):::process
+    end
+
+    Viz(🖼️ Visualization):::output
+
+    %% Connections
+    Cam --> Resize
+    Resize --> Color
+    Color --> Norm
+    Norm --> Switch
+    
+    Switch -->|Default| Y8
+    Switch -->|Alternative| Y5
+    Switch -->|Security Mode| Gun
+    
+    Y8 --> NMS
+    Y5 --> NMS
+    Gun --> NMS
+    
+    NMS --> Conf
+    Conf --> Viz
 ```
 
-This design enables runtime model switching and fair comparison.
+**Figure 3: Runtime Execution Flow (Sequence)**
+
+```mermaid
+sequenceDiagram
+    participant Cam as 📱 IP Webcam
+    participant Sys as ⚙️ Main System
+    participant Model as 🧠 AI Model
+    participant UI as 🖥️ Display
+
+    Note over Sys: Initialization Phase
+    Sys->>Model: Load Weights (YOLOv8/v5/Gun)
+    Model-->>Sys: Model Ready (CUDA/CPU)
+
+    loop Real-time Loop (30+ FPS)
+        Cam->>Sys: Send Video Frame (HTTP)
+        activate Sys
+        Sys->>Sys: Preprocess (Resize/Norm)
+        
+        Sys->>Model: Inference Request (Tensor)
+        activate Model
+        Model-->>Sys: Raw Detections
+        deactivate Model
+        
+        Sys->>Sys: Post-process (NMS)
+        Sys->>UI: Render Bounding Boxes
+        deactivate Sys
+    end
+```
+
+### 2.2 Component Description
+
+1.  **Input Acquisition**: The system connects to an Android device running the "IP Webcam" application. Video frames are captured over Wi-Fi using OpenCV's `VideoCapture` interface.
+2.  **Preprocessing**: Raw frames are resized to the model's expected input dimension (640x640 pixels). Pixel values are normalized from [0, 255] to [0, 1], and the color space is converted from BGR (OpenCV default) to RGB (Model expectation).
+3.  **Inference Engine**: The core detection logic supports hot-swapping between:
+    *   **YOLOv8-nano**: The latest iteration of the YOLO family, optimized for speed and accuracy.
+    *   **YOLOv5-small**: A robust and widely used lightweight model.
+    *   **Gun Detector**: A specialized YOLOv8 model fine-tuned for weapon detection (guns/pistols) for security applications.
+4.  **Post-Processing**: Raw model outputs are filtered using Non-Maximum Suppression (NMS) to remove duplicate bounding boxes. Detections below a configurable confidence threshold (default 0.5) are discarded.
+5.  **Visualization**: The system overlays bounding boxes, class names, confidence scores, and real-time performance metrics (FPS, Latency) onto the original video feed.
 
 ---
 
-## 8. Model Evaluation
+## 3. Dataset & Preprocessing
 
-### Evaluation Methodology
+### 3.1 Dataset Description
+The models used in this project are pre-trained on the **COCO (Common Objects in Context)** dataset. COCO is a large-scale object detection, segmentation, and captioning dataset widely used as a benchmark in computer vision.
 
-Since we use pretrained COCO models, our evaluation focuses on:
-1. **Inference Speed** - FPS and latency measurements
-2. **Detection Consistency** - Stability of detections across frames
-3. **Confidence Distribution** - Quality of confidence predictions
-4. **False Positive Rate** - Incorrect detections
+*   **Classes**: 80 common object categories (e.g., person, car, dog, chair, bottle).
+*   **Diversity**: The dataset contains over 200,000 labeled images with complex everyday scenes, ensuring the models are robust to varying lighting, occlusion, and object scales.
 
-### Expected Performance Metrics
+### 3.2 Preprocessing Steps
+To ensure compatibility with the pre-trained models, the following preprocessing steps are applied to every incoming video frame:
+
+1.  **Resizing**: Input frames (typically 1920x1080 or 1280x720 from the phone) are resized to **640x640** pixels. This specific resolution balances inference speed with detection accuracy. Bilinear interpolation is used to minimize aliasing artifacts.
+2.  **Color Space Conversion**: OpenCV captures images in **BGR** (Blue-Green-Red) format. The models, trained on RGB images, require a conversion step: `cv2.cvtColor(frame, cv2.COLOR_BGR2RGB)`.
+3.  **Normalization**: Pixel intensity values are scaled from the integer range `[0, 255]` to the floating-point range `[0.0, 1.0]`. This standardization helps the neural network converge faster and perform more consistently.
+4.  **Batching**: The single processed image is expanded to add a batch dimension (Shape: `[1, 3, 640, 640]`) before being passed to the model.
+
+---
+
+## 4. Model Designs & Evaluation
+
+### 4.1 Model Specifications
+
+| Feature | YOLOv8-nano | YOLOv5-small | Gun Detector (YOLOv8) |
+| :--- | :--- | :--- | :--- |
+| **Architecture** | Anchor-free, Decoupled Head | Anchor-based, Coupled Head | Anchor-free, Decoupled Head |
+| **Parameters** | ~3.2 Million | ~7.2 Million | ~3.2 Million |
+| **Input Size** | 640x640 | 640x640 | 640x640 |
+| **Framework** | Ultralytics | PyTorch Hub | Ultralytics |
+| **Strengths** | Higher accuracy, better small object detection | Mature ecosystem, stable deployment | Specialized for security, high recall for weapons |
+
+### 4.2 Hyperparameters
+The following hyperparameters were configured for the inference phase:
+
+*   **Confidence Threshold (`--conf`)**: **0.50**. Detections with a confidence score below 50% are ignored to reduce false positives.
+*   **IoU Threshold (`--iou`)**: **0.45**. Intersection over Union threshold used for Non-Maximum Suppression (NMS) to merge overlapping boxes for the same object.
+*   **Device**: **Auto** (CUDA GPU if available, otherwise CPU).
+
+### 4.3 Performance Evaluation
+The system measures performance in real-time. Key metrics include:
+
+*   **Inference Time**: The time taken by the model to process a single frame (excluding preprocessing/post-processing).
+*   **FPS (Frames Per Second)**: The total throughput of the system.
+
+**Observed Results (Typical):**
 
 | Metric | YOLOv8-nano | YOLOv5-small |
-|--------|-------------|--------------|
-| Inference Time | 15-25 ms | 20-35 ms |
-| FPS (GPU) | 40-60 | 28-50 |
-| COCO mAP | 37.3 | 37.4 |
-| Model Size | 6.3 MB | 14.1 MB |
+| :--- | :--- | :--- |
+| **Inference Time (GPU)** | ~15-20 ms | ~25-30 ms |
+| **FPS (GPU)** | ~45-55 FPS | ~35-45 FPS |
+| **Inference Time (CPU)** | ~100-150 ms | ~150-200 ms |
+| **FPS (CPU)** | ~5-8 FPS | ~3-5 FPS |
 
-### Threshold Tuning
-
-Confidence threshold affects detection quality:
-
-| Threshold | Effect |
-|-----------|--------|
-| 0.25 | More detections, more false positives |
-| 0.50 | Balanced (default) |
-| 0.75 | Fewer detections, higher precision |
+*Note: Performance varies based on hardware. GPU acceleration significantly improves real-time capability.*
 
 ---
 
-## 9. Real-Time Performance Analysis
+## 5. Challenges, Limitations & Ethics
 
-### Performance Metrics Tracked
+### 5.1 Challenges
+1.  **Network Latency**: Streaming high-resolution video from a mobile phone over Wi-Fi introduces latency. Network instability can cause frame drops or lag, affecting the "real-time" feel.
+2.  **Hardware Constraints**: Running deep learning models on a standard laptop CPU results in low FPS (5-10 FPS). To achieve smooth 30+ FPS, a dedicated GPU (NVIDIA CUDA) or cloud environment (Google Colab) is required.
+3.  **Lighting Conditions**: The models struggle in low-light environments or with strong backlighting, leading to missed detections or misclassifications.
 
-The system tracks these metrics in real-time:
+### 5.2 Limitations
+*   **Fixed Classes**: The system is limited to the 80 classes in the COCO dataset. It cannot detect objects outside this predefined list without retraining.
+*   **Distance**: Small objects at a significant distance from the camera are often missed due to the resizing step (downsampling to 640x640).
 
-1. **FPS (Frames Per Second)**
-   - Calculated using rolling average (30-frame window)
-   - Displayed on-screen for continuous monitoring
-
-2. **Inference Latency**
-   - Time from frame input to detection output
-   - Measured in milliseconds
-
-3. **Detection Count**
-   - Number of objects detected per frame
-   - Useful for scene complexity analysis
-
-### Expected Results
-
-| Environment | YOLOv8-nano FPS | YOLOv5-small FPS |
-|-------------|-----------------|-------------------|
-| Cloud GPU (T4) | 45-60 | 35-50 |
-| Local GPU | 30-45 | 25-40 |
-| CPU Only | 5-10 | 3-8 |
+### 5.3 Fairness & Ethical Considerations
+*   **Bias**: The COCO dataset, while large, may contain biases in how certain objects or people are represented. For example, person detection accuracy might vary across different demographics if the training data was not perfectly balanced.
+*   **Privacy**: Using a live camera feed raises privacy concerns. The system processes video in real-time and does not store recordings by default, mitigating some risk. However, deployment in public spaces would require consent and clear signage.
+*   **Weapon Detection Risks**: The Gun Detector module must be used responsibly. False positives (detecting a phone or toy as a gun) could lead to unnecessary panic or law enforcement response. Conversely, false negatives in a real security scenario could be dangerous. This system is a prototype and should not be solely relied upon for critical security without further validation.
 
 ---
 
-## 10. Execution Environment
+## 6. Setup & Run Instructions
 
-> **Important:** Due to limited local CPU resources and the real-time nature of object detection models, the system was deployed and evaluated on a **cloud-based GPU environment (Google Colab)**. This ensured stable real-time performance and allowed fair comparison between multiple detection models. The use of cloud acceleration reflects real-world ML deployment practices.
+### 6.1 Prerequisites
+*   **Hardware**: Laptop/PC with Webcam or Android Phone (for IP Webcam). NVIDIA GPU recommended.
+*   **Software**: Python 3.8+, Anaconda or Miniconda (recommended).
 
-### Recommended Setup
+### 6.2 Installation
 
-| Scenario | Recommendation |
-|----------|----------------|
-| Weak CPU | ✅ Use Cloud GPU |
-| Short on time | ✅ Use Cloud GPU |
-| Want smooth demo | ✅ Use Cloud GPU |
-| Worried about lag | ✅ Use Cloud GPU |
+1.  **Clone the Repository**
+    ```bash
+    git clone https://github.com/moiz-mansoori/Real-time-Multi-Model-Object-Classifier.git
+    cd Real-time-Multi-Model-Object-Classifier
+    ```
 
-### Hardware Requirements
+2.  **Create Virtual Environment**
+    ```bash
+    # Create environment
+    python -m venv venv
+    
+    # Activate (Windows)
+    venv\Scripts\activate
+    
+    # Activate (Linux/Mac)
+    source venv/bin/activate
+    ```
 
-- **For Cloud:** Google Colab with GPU runtime (Tesla T4)
-- **For Local:** NVIDIA GPU with CUDA support (optional)
-- **Camera:** Android phone with IP Webcam app
-- **Network:** Same Wi-Fi for phone and PC
+3.  **Install Dependencies**
+    ```bash
+    pip install -r requirements.txt
+    ```
 
-### Software Requirements
+### 6.3 Running the System
 
-- Python 3.8+
-- PyTorch 2.0+
-- Ultralytics (YOLOv8)
-- OpenCV 4.8+
-- NumPy, Matplotlib
-
----
-
-## 11. Challenges & Limitations
-
-### Technical Challenges
-
-| Challenge | Solution |
-|-----------|----------|
-| Network latency | Use local Wi-Fi, minimize video resolution |
-| GPU memory | Use lightweight models (nano, small variants) |
-| Frame drops | Implement frame skipping if needed |
-| Connection stability | Retry logic in VideoStream class |
-
-### Known Limitations
-
-1. **Network Dependency** - Requires stable Wi-Fi connection between phone and PC
-2. **Lighting Conditions** - Detection accuracy varies with lighting
-3. **Small Objects** - Nano/small models may miss very small objects
-4. **Occlusion** - Partially visible objects may not be detected
-
-### Mitigation Strategies
-
-- Use 720p or lower resolution for stable streaming
-- Ensure good lighting for demo
-- Position camera at appropriate distance
-- Allow 2-3 seconds for model warm-up
-
----
-
-## 12. Ethical Considerations
-
-### Privacy Concerns
-
-- **Camera Usage:** Only process frames for object detection, no storage
-- **Personal Data:** No facial recognition or person identification
-- **Data Handling:** Frames are processed and discarded, not saved
-
-### Responsible AI Principles
-
-1. **Transparency** - Model predictions are displayed with confidence scores
-2. **Fairness** - Using well-validated pretrained models
-3. **Accountability** - Clear documentation of system limitations
-4. **Safety** - Not used for critical decision-making without human oversight
-
-### Potential Misuse Prevention
-
-- System designed for educational purposes only
-- No surveillance or tracking capabilities
-- Detection limited to general object categories
-
----
-
-## 13. Conclusion & Future Work
-
-### Summary
-
-This project successfully demonstrates:
-
-1. **Real-time object detection** from mobile camera input
-2. **Multi-model implementation** with YOLOv8-nano and YOLOv5-small
-3. **Performance comparison** between different model architectures
-4. **Integration of 4 lab concepts** in a cohesive system
-
-### Key Achievements
-
-- ✅ Complete implementation of real-time detection pipeline
-- ✅ Professional code structure with modular design
-- ✅ Performance metrics tracking and comparison
-- ✅ User-friendly interface with runtime model switching
-
-### Future Improvements
-
-1. **Custom Training** - Fine-tune models on domain-specific objects
-2. **Model Optimization** - Apply quantization for faster inference
-3. **Multi-Camera Support** - Handle multiple video streams
-4. **Object Tracking** - Add tracking across frames
-5. **Web Interface** - Build browser-based UI with Flask/Streamlit
-6. **Edge Deployment** - Deploy on mobile devices or Raspberry Pi
-
----
-
-## 14. References
-
-1. Redmon, J., & Farhadi, A. (2018). YOLOv3: An Incremental Improvement. arXiv:1804.02767
-2. Jocher, G. (2022). YOLOv5 by Ultralytics. GitHub repository.
-3. Jocher, G. (2023). YOLOv8 by Ultralytics. GitHub repository.
-4. Lin, T. Y., et al. (2014). Microsoft COCO: Common Objects in Context. ECCV.
-5. OpenCV Documentation. https://docs.opencv.org/
-6. PyTorch Documentation. https://pytorch.org/docs/
-7. ML Lab Manual, BSAI-462, Dawood University of Engineering & Technology
-
----
-
-## Appendix A: Setup Instructions
-
-### Installation
-
+**Option 1: Using Laptop Webcam**
 ```bash
-# Clone/download the project
-cd Real-time-Multi-Model-Object-Classifier
-
-# Create virtual environment
-python -m venv venv
-source venv/bin/activate  # Linux/Mac
-venv\Scripts\activate     # Windows
-
-# Install dependencies
-pip install -r requirements.txt
+python main.py --model yolo8 --source 0
 ```
 
-### Running the Application
+**Option 2: Using Mobile Camera (IP Webcam)**
+1.  Install **IP Webcam** app on Android.
+2.  Start server in app and note the IP (e.g., `http://192.168.1.5:8080`).
+3.  Run command:
+    ```bash
+    python main.py --model yolo8 --source "http://192.168.1.5:8080/video"
+    ```
 
+**Option 3: Run Gun Detector**
 ```bash
-# With webcam
-python main.py --model yolo8 --source 0
+python main.py --model gun --source 0
+```
 
-# With IP Webcam
-python main.py --model yolo5 --source "http://192.168.1.10:8080/video"
-
-# Compare both models
+**Option 4: Compare Models**
+```bash
 python main.py --model both --source 0
 ```
 
-### Mobile Camera Setup (IP Webcam)
-
-1. Install "IP Webcam" app from Google Play Store
-2. Open the app and tap "Start Server"
-3. Note the IP address shown (e.g., http://192.168.1.10:8080)
-4. Use `{IP}:8080/video` as the source URL
-
----
-
-## Appendix B: Project Structure
-
-```
-Real-time Multi-Model Object Classifier/
-├── main.py                     # Main entry point
-├── requirements.txt            # Dependencies
-├── README.md                   # Documentation
-│
-├── src/
-│   ├── camera/
-│   │   └── video_stream.py     # Camera handling
-│   ├── preprocessing/
-│   │   └── image_processor.py  # Image preprocessing
-│   ├── detection/
-│   │   ├── base_detector.py    # Abstract detector
-│   │   ├── yolo_v8_detector.py # YOLOv8 implementation
-│   │   └── yolo_v5_detector.py # YOLOv5 implementation
-│   └── utils/
-│       ├── config.py           # Configuration
-│       ├── performance_metrics.py
-│       └── visualization.py
-│
-├── report/
-│   └── PROJECT_REPORT.md       # This report
-│
-├── models/                     # Auto-downloaded weights
-├── results/                    # Performance metrics
-└── demo/                       # Demo videos
-```
-
----
-
-*End of Report*
+### 6.4 Controls
+*   `1`: Switch to YOLOv8
+*   `2`: Switch to YOLOv5
+*   `Q`: Quit application
