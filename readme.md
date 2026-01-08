@@ -41,38 +41,6 @@ This project implements a **real-time object detection system** using a **mobile
 
 ---
 
-## 🏗️ System Architecture
-
-**High-Level System Context**
-
-```mermaid
-graph LR
-    %% Style Definitions
-    classDef mobile fill:#e1f5fe,stroke:#01579b,stroke-width:2px,color:#01579b;
-    classDef system fill:#f3e5f5,stroke:#4a148c,stroke-width:2px,color:#4a148c;
-    classDef display fill:#e8f5e9,stroke:#1b5e20,stroke-width:2px,color:#1b5e20;
-    classDef stream stroke-dasharray: 5 5;
-
-    subgraph Source [Input Source]
-        Mobile[📱 Mobile Camera]:::mobile
-        App[🌐 IP Webcam App]:::mobile
-    end
-
-    subgraph Core [Processing Unit]
-        Engine[⚙️ Multi-Model Classifier]:::system
-    end
-
-    subgraph Output [Visualization]
-        Screen[🖥️ Display Screen]:::display
-    end
-
-    Mobile -->|Optical Input| App
-    App -.->|Wi-Fi Stream (HTTP/RTSP)| Engine
-    Engine -->|Annotated Frames| Screen
-```
-
----
-
 ## 📁 Project Structure
 
 ```
