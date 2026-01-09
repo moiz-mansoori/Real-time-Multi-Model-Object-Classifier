@@ -1,7 +1,7 @@
 """
 Gun Detector Module
 ===================
-Custom gun detection using pre-trained YOLOv8 model.
+.
 For Smart Home Security applications.
 """
 
@@ -20,7 +20,7 @@ from .base_detector import BaseDetector, Detection
 
 class GunDetector(BaseDetector):
     """
-    Gun detector using custom pre-trained YOLOv8 model.
+    
     
     Features:
     - Detects guns/weapons in real-time

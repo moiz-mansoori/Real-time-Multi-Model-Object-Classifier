@@ -245,26 +245,32 @@ def run_detection_loop(
     
     # Screenshot counter
     screenshot_count = 0
+    threat_screenshot_count = 0
+    threat_screenshots_dir = os.path.join(config.get_results_dir(), "threat_detections")
     os.makedirs(config.get_results_dir(), exist_ok=True)
+    os.makedirs(threat_screenshots_dir, exist_ok=True)
     
     # Detection logging (CSV)
     log_path = os.path.join(config.get_results_dir(), f"detection_log_{time.strftime('%Y%m%d_%H%M%S')}.csv")
     log_file = open(log_path, 'w')
     log_file.write("timestamp,model,class,confidence,x1,y1,x2,y2\n")
     print(f"[Main] Detection log: {log_path}")
+    print(f"[Main] Threat screenshots will be saved to: {threat_screenshots_dir}")
     
-    # Alert settings - SMART HOME SECURITY
-    # Trigger alert for potentially dangerous objects
+    # Alert settings - DANGEROUS OBJECTS ONLY
+    # Trigger alert ONLY for gun, knife, ammunition
     alert_classes = [
+        "gun",             # Firearm
+        "guns",            # Gun detector class name
+        "weapon",          # Weapon variant
+        "pistol",          # Firearm variant
+        "rifle",           # Firearm variant  
         "knife",           # Dangerous weapon
-        "scissors",        # Sharp object
-        "baseball bat",    # Potential weapon
-        "bottle",          # Can be used as weapon
-        "backpack",        # Suspicious if unattended
-        "suitcase",        # Suspicious luggage
+        "ammunition",      # Ammo
+        "bullet",          # Ammo variant
     ]
     last_alert_time = 0
-    alert_cooldown = 2.0  # seconds between alerts (faster for security)
+    alert_cooldown = 1.0  # seconds between alerts
     
     # Track which models are currently active (for switching)
     # Start with all loaded models active
@@ -350,19 +356,40 @@ def run_detection_loop(
             for det in detections:
                 log_file.write(f"{timestamp_str},{detector.model_name},{det.class_name},{det.confidence:.3f},{det.bbox[0]},{det.bbox[1]},{det.bbox[2]},{det.bbox[3]}\n")
             
-            # Alert for specific objects
-            detected_alert_classes = [det.class_name for det in detections if det.class_name in alert_classes]
-            if detected_alert_classes and (current_time - last_alert_time) > alert_cooldown:
+            # Alert for DANGEROUS objects only (gun, knife, ammunition)
+            threat_detections = [det for det in detections if det.class_name.lower() in [c.lower() for c in alert_classes]]
+            if threat_detections and (current_time - last_alert_time) > alert_cooldown:
                 last_alert_time = current_time
+                
+                # Save cropped screenshot of each threat detection
+                for det in threat_detections:
+                    threat_screenshot_count += 1
+                    x1, y1, x2, y2 = det.bbox
+                    # Add padding around detection
+                    h, w = frame.shape[:2]
+                    padding = 20
+                    x1 = max(0, int(x1) - padding)
+                    y1 = max(0, int(y1) - padding)
+                    x2 = min(w, int(x2) + padding)
+                    y2 = min(h, int(y2) + padding)
+                    
+                    # Crop the detection area
+                    cropped = frame[y1:y2, x1:x2]
+                    
+                    # Save cropped image
+                    crop_filename = f"{det.class_name}_{threat_screenshot_count}_{time.strftime('%H%M%S')}.jpg"
+                    crop_path = os.path.join(threat_screenshots_dir, crop_filename)
+                    cv2.imwrite(crop_path, cropped)
+                    print(f"\n🚨 THREAT SAVED: {crop_path}")
+                
                 # Play beep sound (cross-platform)
                 try:
                     import subprocess
                     import platform
                     if platform.system() == 'Windows':
                         import winsound
-                        winsound.Beep(1000, 200)
+                        winsound.Beep(1500, 300)  # Higher pitch, longer beep for threats
                     else:
-                        # Linux/Mac: Use paplay, aplay, or beep command
                         try:
                             subprocess.Popen(['paplay', '/usr/share/sounds/freedesktop/stereo/alarm-clock-elapsed.oga'], 
                                            stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
@@ -371,10 +398,19 @@ def run_detection_loop(
                                 subprocess.Popen(['aplay', '-q', '/usr/share/sounds/alsa/Front_Center.wav'],
                                                stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
                             except:
-                                os.system('echo -e "\a"')  # Terminal beep
+                                os.system('echo -e "\a"')
                 except:
                     pass
-                print(f"\n🚨 ALERT: {', '.join(set(detected_alert_classes))} detected!")
+                
+                detected_names = set([det.class_name for det in threat_detections])
+                print(f"🚨 ALERT: {', '.join(detected_names)} detected!")
+                
+                # AUTO-SWITCH: If gun/ammunition detected and gun model is available, switch to it
+                gun_related = ["gun", "guns", "weapon", "pistol", "rifle", "ammunition", "bullet"]
+                if any(name.lower() in gun_related for name in detected_names):
+                    if "gun" in detectors and "gun" not in active_models:
+                        active_models = ["gun"]
+                        print(f"🔄 AUTO-SWITCH: Switched to Gun Detector for better accuracy!")
             
             # End frame timing
             metrics.end_frame(detector.model_name, len(detections))
