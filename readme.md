@@ -149,7 +149,7 @@ python main.py --model both --source 0
 
 ## Performance Metrics
 
-Expected performance (hardware dependent):
+Expected performance (hardware dependent) :
 
 | Metric | YOLOv8-nano | YOLOv5-small | Gun Detector |
 |--------|-------------|--------------|--------------|
